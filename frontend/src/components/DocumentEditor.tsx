@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Save, Eye, EyeOff } from 'lucide-react'
 import CodeMirror from '@uiw/react-codemirror'
 import { markdown } from '@codemirror/lang-markdown'
 import { marked } from 'marked'
+import { documentsApi } from '../services/api'
 
 interface DocumentEditorProps {
   documentId: number
@@ -12,6 +13,7 @@ interface DocumentEditorProps {
 }
 
 export default function DocumentEditor({
+  documentId,
   initialContent,
   onSave,
   onClose,
@@ -19,48 +21,29 @@ export default function DocumentEditor({
   const [content, setContent] = useState(initialContent)
   const [showPreview, setShowPreview] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
-  const [saveTimeout, setSaveTimeout] = useState<NodeJS.Timeout | null>(null)
 
-  // Auto-save after 2 seconds
+  const handleSave = useCallback(async () => {
+    setIsSaving(true)
+    try {
+      await documentsApi.update(documentId, content)
+      onSave?.(content)
+    } catch (error) {
+      console.error('Save failed:', error)
+    } finally {
+      setIsSaving(false)
+    }
+  }, [documentId, content, onSave])
+
+  // Auto-save after 2 seconds of inactivity
   useEffect(() => {
     if (content === initialContent) return
 
-    if (saveTimeout) clearTimeout(saveTimeout)
-
-    const timeout = setTimeout(async () => {
-      setIsSaving(true)
-      await handleSave()
-      setIsSaving(false)
+    const timeout = setTimeout(() => {
+      void handleSave()
     }, 2000)
 
-    setSaveTimeout(timeout)
-
-    return () => {
-      if (timeout) clearTimeout(timeout)
-    }
-  }, [content])
-
-  const handleSave = async () => {
-    setIsSaving(true)
-    // Call PUT endpoint
-    try {
-      const response = await fetch(`/api/v1/documents/${documentId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          // Add auth header if needed - check how other API calls are done in your app
-        },
-        body: JSON.stringify({ content })
-      })
-
-      if (response.ok) {
-        onSave?.(content)
-      }
-    } catch (error) {
-      console.error('Save failed:', error)
-    }
-    setIsSaving(false)
-  }
+    return () => clearTimeout(timeout)
+  }, [content, initialContent, handleSave])
 
   return (
     <div className="flex flex-col h-full border border-gray-200 rounded-xl overflow-hidden">

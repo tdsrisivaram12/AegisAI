@@ -68,24 +68,11 @@ export default function Documents() {
     })
   }
 
-  const handleSaveDocument = async (content: string) => {
+  const handleSaveDocument = () => {
     if (!editingDoc) return
 
-    try {
-      const response = await fetch(`/api/v1/documents/${editingDoc.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ content })
-      })
-
-      if (response.ok) {
-        queryClient.invalidateQueries({ queryKey: ['documents'] })
-      }
-    } catch (error) {
-      console.error('Save failed:', error)
-    }
+    // DocumentEditor already persists via PUT /documents/{id}; refresh the list
+    queryClient.invalidateQueries({ queryKey: ['documents'] })
   }
 
   const getStatusColor = (status: string) => {

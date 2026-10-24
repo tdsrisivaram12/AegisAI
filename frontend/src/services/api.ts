@@ -112,6 +112,10 @@ export const documentsApi = {
     const { data } = await api.post('/documents/generate', request)
     return data
   },
+  update: async (id: number, content: string) => {
+    const { data } = await api.put(`/documents/${id}`, { content })
+    return data
+  },
   delete: async (id: number) => {
     await api.delete(`/documents/${id}`)
   },
