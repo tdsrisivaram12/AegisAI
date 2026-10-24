@@ -89,6 +89,7 @@ class LLMGuard:
             "user_prompt": user_prompt,
             "decision": None,
             "response": None,
+            "sanitized_prompt": None,
             "metadata": {
                 "regex_analysis": None,
                 "intent_analysis": None,
@@ -142,6 +143,7 @@ class LLMGuard:
         elif decision_result.decision == Decision.SANITIZE:
             logger.info("Prompt marked for SANITIZATION")
             sanitized_prompt, sanitization_summary = self.sanitizer.sanitize(user_prompt)
+            result["sanitized_prompt"] = sanitized_prompt
             result["metadata"]["sanitization"] = {
                 "original_length": len(user_prompt),
                 "sanitized_length": len(sanitized_prompt),

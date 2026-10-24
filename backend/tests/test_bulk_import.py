@@ -1,31 +1,51 @@
 """Pytest tests for the bulk import endpoint."""
 
+import os
 import pytest
-from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
 from io import BytesIO
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 import textwrap
+
+os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
+
+from app.core.database import Base, get_db
+from app.core.security import get_current_user
+from app.main import app
+from app.models.user import User
 
 
 @pytest.fixture
 def client():
-    """Create a test client with mocked dependencies."""
-    with patch("app.core.database.get_db") as mock_db:
-        mock_session = MagicMock()
-        mock_db.return_value = mock_session
+    """Create a test client backed by a real in-memory SQLite session."""
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(bind=engine)
+    session = sessionmaker(autocommit=False, autoflush=False, bind=engine)()
 
-        from app.main import app
-        from app.core.security import get_current_user
+    user = User(email="importer@test.com", hashed_password="x", full_name="Importer")
+    session.add(user)
+    session.commit()
+    session.refresh(user)
 
-        mock_user = MagicMock()
-        mock_user.id = 1
+    def override_db():
+        yield session
 
-        app.dependency_overrides[get_current_user] = lambda: mock_user
+    app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[get_current_user] = lambda: user
 
-        with TestClient(app) as client:
-            yield client, mock_session
+    with TestClient(app) as client:
+        yield client, session
 
-        app.dependency_overrides.clear()
+    app.dependency_overrides.clear()
+    session.close()
+    Base.metadata.drop_all(bind=engine)
+    engine.dispose()
 
 
 class TestBulkImport:
@@ -33,15 +53,13 @@ class TestBulkImport:
 
     def test_valid_csv_creates_systems(self, client):
         """Valid CSV creates systems and returns correct created count."""
-        test_client, mock_session = client
+        test_client, session = client
 
         csv_content = textwrap.dedent("""\
             name,description,use_case,sector,version
             CV Screener,Ranks candidates by CV content,CV Screening,HR Tech,1.0
             Fraud Detector,Flags anomalous transactions,Risk Assessment,Finance,2.1
         """).strip().encode("utf-8")
-
-        mock_session.query.return_value.filter.return_value.first.return_value = None
 
         response = test_client.post(
             "/api/v1/ai-systems/import",
@@ -55,7 +73,7 @@ class TestBulkImport:
 
     def test_missing_name_is_skipped(self, client):
         """Row with missing name is skipped and appears in errors."""
-        test_client, mock_session = client
+        test_client, session = client
 
         csv_content = textwrap.dedent("""\
             name,description,use_case,sector,version
@@ -63,13 +81,6 @@ class TestBulkImport:
             ,Missing name system,Test,Test,1.0
             Fraud Detector,Flags transactions,Risk Assessment,Finance,2.1
         """).strip().encode("utf-8")
-
-        def mock_filter(*args, **kwargs):
-            mock_query = MagicMock()
-            mock_query.first.return_value = None
-            return mock_query
-
-        mock_session.query.return_value.filter.side_effect = mock_filter
 
         response = test_client.post(
             "/api/v1/ai-systems/import",
@@ -85,7 +96,7 @@ class TestBulkImport:
 
     def test_duplicate_name_is_reported(self, client):
         """Duplicate name is reported in errors."""
-        test_client, mock_session = client
+        test_client, session = client
 
         csv_content = textwrap.dedent("""\
             name,description,use_case,sector,version
@@ -93,13 +104,6 @@ class TestBulkImport:
             CV Screener,Duplicate name,Risk Assessment,Finance,2.1
         """).strip().encode("utf-8")
 
-        def mock_filter(*args, **kwargs):
-            mock_query = MagicMock()
-            existing = MagicMock() if "CV Screener" in str(args) else None
-            mock_query.first.return_value = existing
-            return mock_query
-
-        mock_session.query.return_value.filter.side_effect = mock_filter
 
         response = test_client.post(
             "/api/v1/ai-systems/import",
@@ -114,7 +118,7 @@ class TestBulkImport:
 
     def test_non_csv_file_returns_400(self, client):
         """Non-CSV file returns 400 status code."""
-        test_client, mock_session = client
+        test_client, session = client
 
         response = test_client.post(
             "/api/v1/ai-systems/import",
@@ -126,7 +130,7 @@ class TestBulkImport:
 
     def test_empty_csv_returns_zero_created(self, client):
         """Empty CSV returns 0 created with no errors."""
-        test_client, mock_session = client
+        test_client, session = client
 
         csv_content = b"name,description,use_case,sector,version"
 
@@ -142,7 +146,7 @@ class TestBulkImport:
 
     def test_multiple_errors_reported(self, client):
         """Multiple errors in different rows are all reported."""
-        test_client, mock_session = client
+        test_client, session = client
 
         csv_content = textwrap.dedent("""\
             name,description,use_case,sector,version
@@ -150,18 +154,6 @@ class TestBulkImport:
             Duplicate Test,First occurrence,Test,Test,1.0
             Duplicate Test,Second occurrence,Test,Test,1.0
         """).strip().encode("utf-8")
-
-        call_count = [0]
-        def mock_filter(*args, **kwargs):
-            mock_query = MagicMock()
-            call_count[0] += 1
-            if call_count[0] == 3:
-                mock_query.first.return_value = MagicMock()
-            else:
-                mock_query.first.return_value = None
-            return mock_query
-
-        mock_session.query.return_value.filter.side_effect = mock_filter
 
         response = test_client.post(
             "/api/v1/ai-systems/import",
@@ -175,14 +167,12 @@ class TestBulkImport:
 
     def test_response_has_correct_schema(self, client):
         """Response has correct BulkImportResponse schema."""
-        test_client, mock_session = client
+        test_client, session = client
 
         csv_content = textwrap.dedent("""\
             name,description,use_case,sector,version
             Test System,Test description,Test,Test,1.0
         """).strip().encode("utf-8")
-
-        mock_session.query.return_value.filter.return_value.first.return_value = None
 
         response = test_client.post(
             "/api/v1/ai-systems/import",

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File,
 from fastapi.responses import StreamingResponse
 from sqlalchemy import asc, desc
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import List, Optional, Union
 import csv
 import io
 from app.core.database import get_db
@@ -50,16 +50,20 @@ _SORTABLE_FIELDS = {
 }
 
 
-@router.get("/", response_model=PaginatedResponse[AISystemResponse])
+@router.get("/", response_model=Union[List[AISystemResponse], PaginatedResponse[AISystemResponse]])
 def list_ai_systems(
     sort_by: Optional[str] = Query("created_at", description="Sort field: name, risk_level, compliance_score, created_at"),
     order: Optional[str] = Query("desc", description="Sort direction: asc, desc"),
-    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
-    limit: int = Query(50, ge=1, le=100, description="Items per page"),
+    page: Optional[int] = Query(None, ge=1, description="Page number (1-indexed). Omit for a plain list."),
+    limit: Optional[int] = Query(None, ge=1, le=100, description="Items per page. Omit for a plain list."),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """List all AI systems for the current user, with optional sorting and pagination."""
+    """List all AI systems for the current user, with optional sorting.
+
+    Returns a plain array by default (backwards compatible). Passing ``page``
+    and/or ``limit`` returns a ``PaginatedResponse`` envelope instead.
+    """
     if sort_by not in _SORTABLE_FIELDS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -75,16 +79,17 @@ def list_ai_systems(
     direction = asc(column) if order == "asc" else desc(column)
 
     base_query = db.query(AISystem).filter(AISystem.owner_id == current_user.id)
-    total = base_query.count()
-    offset = (page - 1) * limit
+    ordered_query = base_query.order_by(direction)
 
-    systems = (
-        base_query
-        .order_by(direction)
-        .offset(offset)
-        .limit(limit)
-        .all()
-    )
+    # No pagination params ⇒ legacy plain list response (documented behaviour).
+    if page is None and limit is None:
+        return ordered_query.all()
+
+    page = page or 1
+    limit = limit or 50
+    total = base_query.count()
+
+    systems = ordered_query.offset((page - 1) * limit).limit(limit).all()
     return PaginatedResponse(items=systems, total=total, page=page, limit=limit)
 
 
@@ -97,6 +102,7 @@ def bulk_import_systems(
     """Import AI systems from a CSV file."""
     errors = []
     created_count = 0
+    seen_names: set[str] = set()
 
     if not file.filename or not file.filename.lower().endswith('.csv'):
         raise HTTPException(
@@ -129,6 +135,12 @@ def bulk_import_systems(
                 errors.append({"row": row_num, "error": "name is required"})
                 continue
 
+            # Names added earlier in this same file are not visible to the
+            # queries below until the session is flushed, so track them here.
+            if name.lower() in seen_names:
+                errors.append({"row": row_num, "error": f"duplicate name '{name}'"})
+                continue
+
             existing = db.query(AISystem).filter(
                 AISystem.owner_id == current_user.id,
                 AISystem.name == name
@@ -147,7 +159,10 @@ def bulk_import_systems(
                     use_case=row.get("use_case", "").strip() or None,
                     sector=row.get("sector", "").strip() or None
                 )
-                db.add(ai_system)
+                with db.begin_nested():
+                    db.add(ai_system)
+                    db.flush()
+                seen_names.add(name.lower())
                 created_count += 1
             except Exception as e:
                 errors.append({"row": row_num, "error": str(e)})

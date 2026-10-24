@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
-from typing import List
+from sqlalchemy import desc
+from typing import List, Optional, Union
 from io import BytesIO
 import re
 
@@ -176,19 +177,33 @@ def create_document(
     return document
 
 
-@router.get("/", response_model=PaginatedResponse[DocumentResponse])
+@router.get("/", response_model=Union[List[DocumentResponse], PaginatedResponse[DocumentResponse]])
 def list_documents(
-    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
-    limit: int = Query(50, ge=1, le=100, description="Items per page"),
+    page: Optional[int] = Query(None, ge=1, description="Page number (1-indexed). Omit for a plain list."),
+    limit: Optional[int] = Query(None, ge=1, le=100, description="Items per page. Omit for a plain list."),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """List all documents for the current user with pagination."""
-    base_query = db.query(Document).filter(Document.owner_id == current_user.id)
-    total = base_query.count()
-    offset = (page - 1) * limit
+    """List all documents for the current user.
 
-    documents = base_query.offset(offset).limit(limit).all()
+    Returns a plain array by default (backwards compatible). Passing ``page``
+    and/or ``limit`` returns a ``PaginatedResponse`` envelope instead.
+    """
+    base_query = db.query(Document).filter(Document.owner_id == current_user.id)
+
+    if page is None and limit is None:
+        return base_query.order_by(desc(Document.created_at)).all()
+
+    page = page or 1
+    limit = limit or 50
+    total = base_query.count()
+    documents = (
+        base_query
+        .order_by(desc(Document.created_at))
+        .offset((page - 1) * limit)
+        .limit(limit)
+        .all()
+    )
     return PaginatedResponse(items=documents, total=total, page=page, limit=limit)
 
 
