@@ -19,7 +19,9 @@ export default function Login() {
 
     try {
       const tokenData = await authApi.login(email, password)
-      const user = await authApi.getMe()
+      // Fetch the profile with the fresh token *before* storing it, otherwise
+      // the request interceptor has no Authorization header yet.
+      const user = await authApi.getMe(tokenData.access_token)
       setAuth(tokenData.access_token, user)
       navigate('/')
     } catch {

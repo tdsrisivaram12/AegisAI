@@ -1,6 +1,17 @@
 import axios from 'axios'
 import { useAuthStore } from '../stores/authStore'
 
+export interface NotificationItem {
+  id: number
+  notification_type: string
+  title: string
+  message: string
+  is_read: boolean
+  resource_type?: string | null
+  resource_id?: number | null
+  created_at: string
+}
+
 const api = axios.create({
   baseURL: '/api/v1',
   headers: {
@@ -49,8 +60,11 @@ export const authApi = {
     const { data } = await api.post('/auth/register', userData)
     return data
   },
-  getMe: async () => {
-    const { data } = await api.get('/auth/me')
+  getMe: async (token?: string) => {
+    const { data } = await api.get(
+      '/auth/me',
+      token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
+    )
     return data
   },
 }
@@ -116,6 +130,10 @@ export const documentsApi = {
     const { data } = await api.put(`/documents/${id}`, { content })
     return data
   },
+  downloadPdf: async (id: number): Promise<Blob> => {
+    const { data } = await api.get(`/documents/${id}/pdf`, { responseType: 'blob' })
+    return data as Blob
+  },
   delete: async (id: number) => {
     await api.delete(`/documents/${id}`)
   },
@@ -123,10 +141,12 @@ export const documentsApi = {
 
 // Notifications API
 export const notificationsApi = {
-  list: (unreadOnly = false) =>
+  list: (unreadOnly = false): Promise<NotificationItem[]> =>
     api.get(`/notifications?unread_only=${unreadOnly}`).then((r) => r.data),
   markRead: (ids: number[]) =>
     api.post('/notifications/read', { ids }),
+  remove: (id: number) =>
+    api.delete(`/notifications/${id}`),
 }
 
 export default api

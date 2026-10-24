@@ -7,6 +7,9 @@ import Dashboard from './pages/Dashboard'
 import AISystems from './pages/AISystems'
 import Classification from './pages/Classification'
 import Documents from './pages/Documents'
+import Analytics from './pages/Analytics'
+import Notifications from './pages/Notifications'
+import Onboarding from './pages/Onboarding'
 import { Toaster } from 'react-hot-toast'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -52,6 +55,10 @@ function App() {
           <Route path="ai-systems" element={<AISystems />} />
           <Route path="classification/:systemId?" element={<Classification />} />
           <Route path="documents" element={<Documents />} />
+          <Route path="analytics" element={<Analytics />} />
+          <Route path="notifications" element={<Notifications />} />
+          <Route path="onboarding" element={<Onboarding />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
     </>

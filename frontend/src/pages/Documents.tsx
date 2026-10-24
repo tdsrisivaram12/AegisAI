@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import toast from 'react-hot-toast'
 import { aiSystemsApi, documentsApi } from '../services/api'
-import { FileText, Download, Trash2, Plus, Edit } from 'lucide-react'
+import { FileText, Download, FileDown, Trash2, Plus, Edit } from 'lucide-react'
 import DocumentEditor from '../components/DocumentEditor'
 
 interface Document {
@@ -73,6 +74,20 @@ export default function Documents() {
 
     // DocumentEditor already persists via PUT /documents/{id}; refresh the list
     queryClient.invalidateQueries({ queryKey: ['documents'] })
+  }
+
+  const handleDownloadPdf = async (doc: Document) => {
+    try {
+      const blob = await documentsApi.downloadPdf(doc.id)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${doc.title}.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      toast.error('Could not download PDF')
+    }
   }
 
   const getStatusColor = (status: string) => {
@@ -177,6 +192,13 @@ export default function Documents() {
                     className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
                   >
                     <Download className="w-5 h-5" />
+                  </button>
+                  <button
+                    onClick={() => handleDownloadPdf(doc)}
+                    className="p-2 text-gray-400 hover:text-primary-600 rounded-lg hover:bg-primary-50"
+                    title="Download PDF"
+                  >
+                    <FileDown className="w-5 h-5" />
                   </button>
                   <button
                     onClick={() => deleteMutation.mutate(doc.id)}
