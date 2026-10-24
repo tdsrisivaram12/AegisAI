@@ -8,7 +8,7 @@ import io
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
-from app.models.ai_system import AISystem
+from app.models.ai_system import AISystem, ComplianceStatus, RiskLevel
 from app.schemas.ai_system import (
     AISystemCreate,
     AISystemUpdate,
@@ -54,12 +54,15 @@ _SORTABLE_FIELDS = {
 def list_ai_systems(
     sort_by: Optional[str] = Query("created_at", description="Sort field: name, risk_level, compliance_score, created_at"),
     order: Optional[str] = Query("desc", description="Sort direction: asc, desc"),
+    search: Optional[str] = Query(None, description="Case-insensitive substring match on the system name"),
+    risk_level: Optional[str] = Query(None, description="Filter by risk level: minimal, limited, high, unacceptable"),
+    compliance_status: Optional[str] = Query(None, description="Filter by compliance status: not_started, in_progress, compliant, non_compliant"),
     page: Optional[int] = Query(None, ge=1, description="Page number (1-indexed). Omit for a plain list."),
     limit: Optional[int] = Query(None, ge=1, le=100, description="Items per page. Omit for a plain list."),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """List all AI systems for the current user, with optional sorting.
+    """List all AI systems for the current user, with optional sorting and filtering.
 
     Returns a plain array by default (backwards compatible). Passing ``page``
     and/or ``limit`` returns a ``PaginatedResponse`` envelope instead.
@@ -79,6 +82,28 @@ def list_ai_systems(
     direction = asc(column) if order == "asc" else desc(column)
 
     base_query = db.query(AISystem).filter(AISystem.owner_id == current_user.id)
+
+    if search:
+        base_query = base_query.filter(AISystem.name.ilike(f"%{search}%"))
+
+    if risk_level is not None:
+        allowed_risk = {level.value for level in RiskLevel}
+        if risk_level.lower() not in allowed_risk:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid risk_level '{risk_level}'. Allowed: {', '.join(sorted(allowed_risk))}",
+            )
+        base_query = base_query.filter(AISystem.risk_level == risk_level.lower())
+
+    if compliance_status is not None:
+        allowed_status = {value.value for value in ComplianceStatus}
+        if compliance_status.lower() not in allowed_status:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid compliance_status '{compliance_status}'. Allowed: {', '.join(sorted(allowed_status))}",
+            )
+        base_query = base_query.filter(AISystem.compliance_status == compliance_status.lower())
+
     ordered_query = base_query.order_by(direction)
 
     # No pagination params ⇒ legacy plain list response (documented behaviour).

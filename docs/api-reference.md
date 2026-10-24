@@ -192,8 +192,24 @@ List all AI systems owned by the authenticated user. Supports search and filteri
 | `search` | string | Filter by name (case-insensitive substring) |
 | `risk_level` | string | Filter: `minimal`, `limited`, `high`, `unacceptable` |
 | `compliance_status` | string | Filter: `not_started`, `in_progress`, `compliant`, `non_compliant` |
+| `sort_by` | string | Sort field: `name`, `risk_level`, `compliance_score`, `created_at` (default `created_at`) |
+| `order` | string | Sort direction: `asc`, `desc` (default `desc`) |
+| `page` | integer | Page number, 1-indexed. Omit for a plain array. |
+| `limit` | integer | Items per page (1–100). Omit for a plain array. |
 
-**Response `200`:** Array of AI system objects.
+**Response `200`:** Array of AI system objects. When `page` and/or `limit` is
+supplied the response is wrapped instead:
+
+```json
+{
+  "items": [ ... ],
+  "total": 42,
+  "page": 1,
+  "limit": 50
+}
+```
+
+**Errors:** `400` invalid `risk_level`, `compliance_status`, `sort_by` or `order`.
 
 ---
 
@@ -356,7 +372,15 @@ curl -H "Authorization: Bearer $TOKEN" \
 
 List all documents for the authenticated user.
 
-**Response `200`:** Array of document objects.
+**Query parameters:**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `page` | integer | Page number, 1-indexed. Omit for a plain array. |
+| `limit` | integer | Items per page (1–100). Omit for a plain array. |
+
+**Response `200`:** Array of document objects, newest first. When `page` and/or
+`limit` is supplied the response is wrapped in `{items, total, page, limit}`.
 
 ---
 
@@ -561,13 +585,42 @@ Badge colour by risk level:
 
 ## Notifications
 
-> **Status:** Model and Alembic migration in progress (PR #175). Endpoint scaffold present — responses will be empty until the migration is applied.
-
 ### GET /notifications
 
-List notifications for the authenticated user.
+List the authenticated user's notifications, newest first.
+
+**Query parameters:**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `unread_only` | boolean | Only return unread notifications (default `false`) |
+| `limit` | integer | Maximum notifications to return (1–200, default `50`) |
 
 **Response `200`:** Array of notification objects.
+
+---
+
+### POST /notifications/read
+
+Mark one or more notifications as read. Only the current user's notifications
+are affected.
+
+**Request body:**
+```json
+{"ids": [1, 2, 3]}
+```
+
+**Response `204`:** No content.
+
+---
+
+### DELETE /notifications/{id}
+
+Delete a single notification owned by the authenticated user.
+
+**Response `204`:** No content.
+
+**Errors:** `404` notification not found or not owned by you.
 
 ---
 

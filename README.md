@@ -182,7 +182,7 @@ Recent community contributions (May 2026):
 - [x] Guard scan GitHub Action
 - [x] 75-row regulatory QA evaluation dataset
 - [ ] Pre-loaded regulatory knowledge base (EU AI Act PDF, GDPR, ISO 42001, NIST AI RMF)
-- [ ] Notification model + bell UI (in progress)
+- [x] Notification model + bell UI + notifications API
 - [ ] Audit log for all Guard scan decisions (in progress)
 - [ ] Compliance score rollup over time (in progress)
 - [ ] Reassessment reminder scheduler

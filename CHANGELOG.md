@@ -5,6 +5,30 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased]
+
+### Fixed
+- `GET /ai-systems` and `GET /documents` return a plain array again by default;
+  pass `page`/`limit` to get the `{items, total, page, limit}` envelope.
+- `GET /ai-systems` now honours the documented `search`, `risk_level` and
+  `compliance_status` filters.
+- Document editor saved through the authenticated API client (it previously
+  used an unauthenticated `fetch`, so saves returned 401).
+- Duplicate rows inside a single CSV bulk import are now rejected.
+- Pinned `bcrypt==4.0.1` — passlib 1.7.4 crashes with bcrypt 5.x
+  ("password cannot be longer than 72 bytes"), breaking register/login.
+- `requirements.txt` installs a working auth stack again.
+
+### Added
+- Notifications API: `GET /notifications`, `POST /notifications/read`,
+  `DELETE /notifications/{id}` plus the `create_notification` helper.
+- Document templates for data governance, transparency notice, human oversight
+  plan and incident report (previously returned 400 "No template available").
+- Guard scan responses now include the sanitized prompt when the decision is
+  `sanitize`.
+
+---
+
 ## [0.1.0] — 2026-04-05
 
 ### Added

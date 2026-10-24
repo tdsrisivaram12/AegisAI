@@ -12,14 +12,20 @@ TODO for contributors (medium difficulty):
 from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
 from threading import Lock
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
+from app.core.database import get_db
 from app.core.security import get_current_user
+from app.models.notification import NotificationType
 from app.models.user import User
 
 router = APIRouter()
+logger = logging.getLogger("aegisai.guard")
 
 
 _RATE_LIMIT_REQUESTS = 60
@@ -62,6 +68,7 @@ def _check_rate_limit(user_id: int) -> tuple[bool, int]:
 def scan_prompt(
     request: ScanRequest,
     current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """
     Scan a prompt for injection risks.
@@ -90,6 +97,23 @@ def scan_prompt(
         san_level = level_map.get(settings.GUARD_SANITIZATION_LEVEL, SanitizationLevel.MEDIUM)
         guard = LLMGuard(sanitization_level=san_level)
         result = guard.guard(request.prompt)
+
+        if result.get("decision") == "block":
+            try:
+                from app.api.v1.notifications import create_notification
+
+                create_notification(
+                    db=db,
+                    user_id=current_user.id,
+                    notification_type=NotificationType.GUARD_BLOCK,
+                    title="Prompt blocked by LLM Guard",
+                    message=(
+                        "A prompt submitted to the Guard was blocked: "
+                        f"{request.prompt[:200]}"
+                    ),
+                )
+            except Exception as notify_error:  # never fail a scan because of the feed
+                logger.warning("Could not record GUARD_BLOCK notification: %s", notify_error)
 
         return ScanResponse(
             decision=result["decision"],

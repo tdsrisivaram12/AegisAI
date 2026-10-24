@@ -57,8 +57,7 @@
              │           PostgreSQL 15              │
              │  users · ai_systems · documents      │
              │  rag_feedback                        │
-             │  audit_log (migration pending)       │
-             │  notifications (migration pending)   │
+             │  audit_log · notifications          │
              └─────────────────────────────────────┘
 ```
 
@@ -278,8 +277,6 @@ rag_feedback
   created_at
 
 -- Pending migrations:
-audit_log                    (PR #160 open)
-notifications                (PR #175 open)
 webhooks                     (scaffold — no migration yet)
 compliance_snapshots         (scaffold — no migration yet)
 ```
@@ -329,7 +326,7 @@ AegisAI/
 │   │   │   ├── rag.py               ← query + feedback + low-quality chunks
 │   │   │   ├── analytics.py         ← compliance metrics aggregation
 │   │   │   ├── badge.py             ← SVG badge endpoint
-│   │   │   ├── notifications.py     ← in-app notifications (scaffold)
+│   │   │   ├── notifications.py     ← in-app notifications (list / mark read / delete)
 │   │   │   └── webhooks.py          ← webhook listeners (scaffold)
 │   │   ├── core/
 │   │   │   ├── config.py            ← pydantic-settings (reads .env)
