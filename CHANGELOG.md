@@ -26,6 +26,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   plan and incident report (previously returned 400 "No template available").
 - Guard scan responses now include the sanitized prompt when the decision is
   `sanitize`.
+- `GET /badge/{system_id}` — public SVG/JSON compliance badge.
+- `GET /analytics/summary` and `GET /analytics/compliance-timeline`.
+- Analytics and Notifications pages in the frontend are wired to the API, and
+  all pages (analytics, notifications, onboarding) have routes.
+- ``Download PDF`` button in the Documents page.
+- A blocked Guard scan now raises a `guard_block` notification.
+- Frontend login fetches the profile with the freshly issued token, so signing
+  in no longer redirects straight back to the login screen.
 
 ---
 

@@ -184,7 +184,7 @@ Recent community contributions (May 2026):
 - [ ] Pre-loaded regulatory knowledge base (EU AI Act PDF, GDPR, ISO 42001, NIST AI RMF)
 - [x] Notification model + bell UI + notifications API
 - [ ] Audit log for all Guard scan decisions (in progress)
-- [ ] Compliance score rollup over time (in progress)
+- [x] Compliance score rollup over time (analytics endpoints + page)
 - [ ] Reassessment reminder scheduler
 - [ ] Onboarding wizard
 - [ ] MCP server (Claude / Copilot integration)
