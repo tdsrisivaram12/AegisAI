@@ -533,7 +533,7 @@ Surface document chunks with high thumbs-down ratios. Admin / scale subscription
 
 ## Analytics
 
-### GET /analytics
+### GET /analytics/summary
 
 Return compliance metrics aggregated across the authenticated user's AI systems.
 
@@ -554,9 +554,38 @@ Return compliance metrics aggregated across the authenticated user's AI systems.
     "non_compliant": 0
   },
   "documents_generated": 6,
-  "average_compliance_score": 0.74
+  "average_compliance_score": 74.0
 }
 ```
+
+`average_compliance_score` is on a 0–100 scale, or `null` when no system has
+been scored yet.
+
+---
+
+### GET /analytics/compliance-timeline
+
+Return the recorded compliance snapshots for one AI system.
+
+**Query parameters:**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `system_id` | integer | Required. AI system to report on |
+| `days` | integer | Look-back window in days (1–365, default `30`) |
+
+**Response `200`:**
+```json
+{
+  "ai_system_id": 42,
+  "ai_system_name": "CV Screener",
+  "snapshots": [
+    {"ai_system_id": 42, "compliance_score": 74.0, "compliance_status": "in_progress", "risk_level": "high", "snapshotted_at": "2026-05-12T02:00:00"}
+  ]
+}
+```
+
+**Errors:** `404` system not found or not owned by you.
 
 ---
 
@@ -564,9 +593,16 @@ Return compliance metrics aggregated across the authenticated user's AI systems.
 
 ### GET /badge/{system_id}
 
-Return an SVG compliance badge for embedding in READMEs or dashboards.
+Public (no authentication) SVG compliance badge for embedding in READMEs or
+dashboards.
 
-**Response `200`:** `image/svg+xml`
+**Query parameters:**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `format` | string | `svg` (default) or `json` for machine-readable metadata |
+
+**Response `200`:** `image/svg+xml`, or JSON when `?format=json`
 
 Embed example:
 ```markdown

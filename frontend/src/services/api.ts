@@ -12,6 +12,28 @@ export interface NotificationItem {
   created_at: string
 }
 
+export interface AnalyticsSummary {
+  total_systems: number
+  by_risk_level: Record<string, number>
+  by_compliance_status: Record<string, number>
+  documents_generated: number
+  average_compliance_score: number | null
+}
+
+export interface ComplianceSnapshot {
+  ai_system_id: number
+  compliance_score: number | null
+  compliance_status: string
+  risk_level: string | null
+  snapshotted_at: string
+}
+
+export interface ComplianceTimeline {
+  ai_system_id: number
+  ai_system_name: string
+  snapshots: ComplianceSnapshot[]
+}
+
 const api = axios.create({
   baseURL: '/api/v1',
   headers: {
@@ -147,6 +169,20 @@ export const notificationsApi = {
     api.post('/notifications/read', { ids }),
   remove: (id: number) =>
     api.delete(`/notifications/${id}`),
+}
+
+// Analytics API
+export const analyticsApi = {
+  summary: async (): Promise<AnalyticsSummary> => {
+    const { data } = await api.get('/analytics/summary')
+    return data
+  },
+  timeline: async (systemId: number, days = 30): Promise<ComplianceTimeline> => {
+    const { data } = await api.get(
+      `/analytics/compliance-timeline?system_id=${systemId}&days=${days}`
+    )
+    return data
+  },
 }
 
 export default api

@@ -3,22 +3,18 @@ Public Compliance Badge API — no authentication required.
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
 
-TODO for contributors (help wanted):
-  - Implement GET /badge/{system_id} — return an SVG badge showing the
-    AI system's current compliance status and risk level.
-    This endpoint is PUBLIC (no JWT required) so organisations can embed
-    the badge in their README or website.
-  - The badge should show: system name, risk level, compliance status,
-    and a color (green=compliant, yellow=in_progress, red=non_compliant).
-  - Optionally support ?format=json to return machine-readable JSON instead.
-  - Acceptance criteria: visiting /badge/{id} in a browser renders an
-    SVG badge without requiring a login.
+GET /badge/{system_id} returns an SVG badge (default) or JSON metadata so
+organisations can embed the AI system's compliance status in a README or
+website. The endpoint is public — callers need no JWT.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
+
 from app.core.database import get_db
+from app.models.ai_system import AISystem
+from app.modules.badge.badge_generator import generate_badge_svg
 
 router = APIRouter()
 
@@ -29,13 +25,32 @@ def get_compliance_badge(
     format: str = "svg",      # "svg" | "json"
     db: Session = Depends(get_db),
 ):
-    """
-    Return a public compliance badge for an AI system.
+    """Return a public compliance badge for an AI system."""
+    ai_system = db.query(AISystem).filter(AISystem.id == system_id).first()
 
-    TODO (help wanted): look up the AISystem by ID (no auth check — public),
-    generate an SVG from the badge template in
-    app/modules/badge/badge_generator.py, return with Content-Type image/svg+xml.
-    Return 404 if the system does not exist.
-    """
-    # TODO: implement
-    raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Not implemented yet")
+    if not ai_system:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="AI system not found",
+        )
+
+    risk_level = ai_system.risk_level.value if ai_system.risk_level else None
+    compliance_status = (
+        ai_system.compliance_status.value if ai_system.compliance_status else "not_started"
+    )
+
+    if format.lower() == "json":
+        return {
+            "system_id": ai_system.id,
+            "system_name": ai_system.name,
+            "risk_level": risk_level,
+            "compliance_status": compliance_status,
+            "compliance_score": ai_system.compliance_score,
+        }
+
+    svg = generate_badge_svg(ai_system.name, risk_level, compliance_status)
+    return Response(
+        content=svg,
+        media_type="image/svg+xml",
+        headers={"Cache-Control": "public, max-age=60"},
+    )
